@@ -1,0 +1,120 @@
+import urllib2
+import time
+import datetime
+
+Dosages = []
+Medications = []
+DosagesDone = []
+CompartmentsDone = []
+
+
+def readDosages():
+	del Dosages[:]
+	data = urllib2.urlopen("https://preview.c9users.io/glort/mediapp/FileReadTest.txt").read(20000) # read only 20 000 chars
+	data = data.split("\n") # then split it into lines
+	
+	length = len(data)
+
+	def my_range_by_three(start, end, step):
+    		while start < end:
+        		yield start
+        		start += step
+
+	for i in my_range_by_three(0,length, 3):
+		
+		code = int(data[i])
+		hour = int(data[i + 1])
+		min = int(data[i + 2])
+		D = Dosage(code, hour, min)
+		Dosages.append(D)
+	
+
+class Dosage():
+	code = 0
+	hour = 0
+	min = 0
+	done = False
+	def __init__(self, CODE, HOUR, MIN):
+		self.code = CODE
+		self.hour = HOUR
+		self.min = MIN
+		self.done = False
+
+class Medication():
+	def __init__(self, code, compartmentList):
+		self.code = code
+		self.compartmentList = compartmentList
+	
+class Compartment():
+	def __init__(self, disc, slot):
+		self.disc = disc
+		self.slot = slot
+
+def readMedications():
+	del Medications[:]
+	
+	data = urllib2.urlopen("https://preview.c9users.io/glort/mediapp/Disks.txt").read(20000) # read only 20 000 chars
+	data = data.split("\n") # then split it into lines
+
+	Med = []
+	
+	length = len(data)
+	for i in range (0,length/2):
+		code = data[i]
+		disc = data[i + 1]
+		CompartmentList = []
+		for i in range(1,10):
+			C = Compartment(disc, i)
+			CompartmentList.append(C)
+		M = Medication(code, CompartmentList)
+		Med.append(M)
+	length = len(Med)- 1
+	Medications.append(Med[0])
+	for i in range(1, length):
+		if(Med[i].code == Med[i - 1].code):
+			print "working"
+			Medications[-1].compartmentList = Med[i].compartmentList + Med[i - 1].compartmentList
+		else:
+			Medications.append(Med[i])			
+	
+def readLoad():
+	data = urllib2.urlopen("https://preview.c9users.io/glort/mediapp/Load.txt").read(20000) # read only 20 000 chars
+	data = data.split("\n") # then split it into lines
+	if (data[0] == 1):
+		return True	
+	else:
+		return False
+
+readMedications()
+
+while(True):
+	readDosages()
+
+	Now = datetime.datetime.now().time()
+	Minutes =  Now.minute
+	Hour = Now.hour
+	
+	print Hour
+	print Minutes
+	
+	#Refresh DosagesDone at midnight
+	if(Hour == 0 and Min ==0):
+		del DosagesDone[:]
+
+	#Refresh Medications only when reloaded
+	if(readLoad()):
+		print "reloading"
+		readMedications()
+
+	for D in Dosages:
+		for DD in DosagesDone:
+			if(D.code == DD.code and D.hour == DD.hour and D.min == DD.min):
+				D.done = True
+		if (D.done == False and D.hour == Hour and D.min == Minutes):
+			for M in Medications:
+				if(int(D.code) == int(M.code)):
+					##Serial data send M.disc and M.compartment
+					print "Sending to Arduino: Disc ", M.compartmentList[0].disc, " Slot ", M.compartmentList[0].slot
+					M.compartmentList.remove(M.compartmentList[0])	
+					DosagesDone.append(D)
+					
